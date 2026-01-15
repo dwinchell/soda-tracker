@@ -12,6 +12,8 @@ const loginBtn = document.getElementById('login');
 const authOutput = document.getElementById('auth-output');
 const todayOutput = document.getElementById('today-output');
 
+const add12Btn = document.getElementById('add-12');
+
 loginBtn.addEventListener('click', async () => {
   authOutput.textContent = 'Signing in…';
   todayOutput.textContent = 'Today total: —';
@@ -31,6 +33,7 @@ loginBtn.addEventListener('click', async () => {
 
   const user = data.user;
   authOutput.textContent = `Signed in\n\nauth.uid():\n${user.id}`;
+  add12Btn.disabled = false;
 
   await loadTodayTotal();
 });
