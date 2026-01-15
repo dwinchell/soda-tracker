@@ -14,6 +14,9 @@ const todayOutput = document.getElementById('today-output');
 
 const add12Btn = document.getElementById('add-12');
 
+const loginScreen = document.getElementById('login-screen');
+const trackingScreen = document.getElementById('track-screen');
+
 loginBtn.addEventListener('click', async () => {
     authOutput.textContent = 'Signing in…';
     todayOutput.textContent = 'Today total: —';
@@ -34,6 +37,9 @@ loginBtn.addEventListener('click', async () => {
     const user = data.user;
     authOutput.textContent = `Signed in\n\nauth.uid():\n${user.id}`;
     add12Btn.disabled = false;
+
+    loginScreen.hidden = true;
+    trackingScreen.hidden = false;
 
     await loadTodayTotal();
 });

@@ -16,3 +16,7 @@ pre {
     margin-top: 1.5rem;
     overflow-x: auto;
 }
+
+.screen[hidden] {
+    display: none;
+}
