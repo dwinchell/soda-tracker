@@ -8,8 +8,9 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const emailInput = document.getElementById('email');
 const passwordInput = document.getElementById('password');
 const loginBtn = document.getElementById('login');
+const loginText = document.getElementById('login-text');
 
-const authOutput = document.getElementById('auth-output');
+const authInfo = document.getElementById('auth-info');
 const todayOutput = document.getElementById('today-output');
 
 const add12Btn = document.getElementById('add-12');
@@ -18,7 +19,7 @@ const loginScreen = document.getElementById('login-screen');
 const trackingScreen = document.getElementById('track-screen');
 
 loginBtn.addEventListener('click', async () => {
-    authOutput.textContent = 'Signing in…';
+    loginText.textContent = 'Signing in…';
     todayOutput.textContent = 'Today total: —';
 
     const email = emailInput.value;
@@ -30,12 +31,12 @@ loginBtn.addEventListener('click', async () => {
     });
 
     if (error) {
-        authOutput.textContent = `Error:\n${error.message}`;
+        loginText.textContent = `Error:\n${error.message}`;
         return;
     }
 
     const user = data.user;
-    authOutput.textContent = `Signed in\n\nauth.uid():\n${user.id}`;
+    authInfo.textContent = `Signed in as ${user.id}`;
     add12Btn.disabled = false;
 
     loginScreen.hidden = true;
