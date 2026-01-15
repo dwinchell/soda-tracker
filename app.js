@@ -37,10 +37,8 @@ loginBtn.addEventListener('click', async () => {
 
     const user = data.user;
     authInfo.textContent = `Signed in as ${user.id}`;
-    add12Btn.disabled = false;
 
-    loginScreen.hidden = true;
-    trackingScreen.hidden = false;
+    showTrackingScreen();
 
     await loadTodayTotal();
 });
@@ -63,6 +61,12 @@ async function loadTodayTotal() {
     const total = data.reduce((sum, row) => sum + Number(row.ounces), 0);
 
     todayOutput.textContent = `Today total: ${total} oz`;
+}
+
+function showTrackingScreen() {
+    loginScreen.hidden = true;
+    trackingScreen.hidden = false;
+    add12Btn.disabled = false;
 }
 
 add12Btn.addEventListener('click', async () => {
