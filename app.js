@@ -85,3 +85,11 @@ add12Btn.addEventListener('click', async () => {
     await loadTodayTotal();
     add12Btn.disabled = false;
 });
+
+// Handle case where user is already signed in
+const { data } = await supabase.auth.getSession();
+if (data.session) {
+    authInfo.textContent = `Signed in as ${data.session.user.id}`;
+    showTrackingScreen();
+    await loadTodayTotal();
+}
