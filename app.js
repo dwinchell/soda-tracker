@@ -2,8 +2,13 @@ import { createStore } from './store.js';
 import * as remote from './remote.js';
 import {
   addDays, localYmd, parseYmd, countsByDay, computeStats, recentDays, weeklyTrend,
-  cheatInWeek, canApplyCheat,
+  cheatInWeek, canApplyCheat, dailyRuns, badgeDates,
 } from './streak.js';
+import { catSvg } from './cat.js';
+import { BADGES, badgeSvg } from './achievements.js';
+import { QUIPS } from './messages.js';
+import { planCelebration, loadCelebrated, saveCelebrated, clearCelebrated, pickStable } from './celebrate.js';
+import { showCelebration } from './celebrate-ui.js';
 
 const store = createStore();
 const root = document.getElementById('app');
@@ -69,18 +74,37 @@ function render() {
       <span class="track"><span class="fill ${cls}" style="width:${w}%"></span>${lim}</span>${tag}</div>`;
   }).join('');
 
+  const runs = dailyRuns({ today, counts, goals: s.goals, cheats });
+  const earned = badgeDates(runs, BADGES.map((b) => b.days));
+  const atLimit = st.todayLimit > 0 && st.todayCount === st.todayLimit;
+  const quipKey = st.todayStatus === 'over' ? 'over' : st.todayStatus === 'cheat' ? 'cheat' : atLimit ? 'atLimit'
+    : st.todayCount === 0 ? (runs.length ? 'zero' : 'fresh') : 'under';
+  const mood = quipKey === 'over' ? 'glare' : quipKey === 'zero' ? 'smug' : quipKey === 'under' ? 'half' : 'judge';
+  const quip = pickStable(QUIPS[quipKey], `${today}:${st.todayCount}:${st.todayLimit}`);
+  const shelf = BADGES.map((b) => {
+    const when = earned[b.days];
+    return `<div class="shelf-item ${when ? 'got' : ''}" title="${b.blurb}">${badgeSvg(b, { earned: !!when, size: 64 })}
+      <div class="shelf-name">${when ? b.name : `${b.days} days`}</div>
+      ${when ? `<div class="muted shelf-sub">${parseYmd(when).toLocaleDateString(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' })}</div>` : ''}</div>`;
+  }).join('');
+
   const diff = trend.change;
   const trendText = trend.prev7 === 0 && trend.last7 === 0 ? 'No sodas in the last two weeks.'
     : `Last 7 days: <b>${trend.last7}</b> vs <b>${trend.prev7}</b> the week before` +
       (diff < 0 ? ` — down ${Math.abs(diff)} 🎉` : diff > 0 ? ` — up ${diff}` : ' — the same');
 
   root.innerHTML = `
-    <div class="top"><h1>Soda Tracker</h1><span class="muted">${syncText(s)}</span></div>
+    <div class="top"><h1>🐾 Soda Tracker</h1><span class="muted">${syncText(s)}</span></div>
 
     <section class="card streak" aria-label="Streak">
       <div class="num">${st.current}</div>
       <div class="label">day streak${st.current > 0 ? ' 🔥' : ''}</div>
       <div class="best">Best: ${plural(st.best, 'day')} · today counts when it ends</div>
+    </section>
+
+    <section class="card mascot" aria-label="Biscuit the cat">
+      ${catSvg({ size: 72, mood, label: 'Biscuit, the judgmental cat' })}
+      <p class="bubble">${quip}</p>
     </section>
 
     <section class="card today" aria-label="Today">
@@ -97,6 +121,11 @@ function render() {
       <h2>Last 7 days <span style="text-transform:none;letter-spacing:0">(line = limit)</span></h2>
       <div class="rows">${rows}</div>
       <div class="trend">${trendText}</div>
+    </section>
+
+    <section class="card" aria-label="Badges">
+      <h2>Badges</h2>
+      <div class="shelf">${shelf}</div>
     </section>
 
     <section class="card" aria-label="Goal">
@@ -121,7 +150,7 @@ function syncText(s) {
 
 function renderGoalSetup(s) {
   root.innerHTML = `
-    <div class="top"><h1>Soda Tracker</h1><span class="muted">${syncText(s)}</span></div>
+    <div class="top"><h1>🐾 Soda Tracker</h1><span class="muted">${syncText(s)}</span></div>
     <section class="card form">
       <h2>Set your goal</h2>
       <p style="margin:0">How many sodas a day is your limit? Stay at or under it each day to build a streak.</p>
@@ -134,7 +163,7 @@ function renderGoalSetup(s) {
 
 function renderLogin() {
   root.innerHTML = `
-    <div class="top"><h1>Soda Tracker</h1></div>
+    <div class="top"><h1>🐾 Soda Tracker</h1></div>
     <form class="card form" id="login">
       <label>Email <input name="email" type="email" autocomplete="email" required></label>
       <label>Password <input name="password" type="password" autocomplete="current-password" required></label>
@@ -173,17 +202,40 @@ root.addEventListener('click', async (ev) => {
   else if (act === 'dismiss') store.clearError();
   else if (act === 'signout') {
     if (store.hasUnsent() && !confirm('Some changes have not synced yet and would be lost. Sign out anyway?')) return;
-    await remote.signOut(); store.wipe(); user = null; render();
+    await remote.signOut(); store.wipe(); clearCelebrated(); user = null; render();
   }
 });
 
-store.subscribe(() => { if (document.activeElement?.tagName === 'INPUT') return; render(); });
+let celebrateReady = false, celebrating = false;
+function maybeCelebrate() {
+  if (!user || celebrating || !celebrateReady) return;
+  const s = store.get();
+  if (!s.goals.length) return;
+  const plan = planCelebration({
+    today: store.today(), counts: countsByDay(s.entries), goals: s.goals, cheats: new Set(s.cheats),
+    state: loadCelebrated(), rand: Math.random,
+  });
+  if (!plan) return;
+  saveCelebrated(plan.nextState); // mark as shown now, so a reload does not repeat it
+  celebrating = true;
+  showCelebration(plan, { onClose: () => { celebrating = false; } });
+}
+// Wait for this session's sync so yesterday's sodas from other devices are counted; do not wait forever.
+const readyNow = () => { celebrateReady = true; maybeCelebrate(); };
+if (!navigator.onLine) readyNow(); else setTimeout(readyNow, 5000);
+
+store.subscribe(() => {
+  if (store.hasSynced() && !celebrateReady) readyNow();
+  if (document.activeElement?.tagName === 'INPUT') return;
+  render();
+});
 addEventListener('online', () => { store.setOnline(true); render(); });
 addEventListener('offline', () => { store.setOnline(false); render(); });
 let lastSync = 0;
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState !== 'visible') return;
   render(); // the day may have rolled over
+  maybeCelebrate();
   if (Date.now() - lastSync > 30000) { lastSync = Date.now(); store.sync(); }
 });
 setInterval(() => { if (document.visibilityState === 'visible') render(); }, 60000);

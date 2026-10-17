@@ -1,7 +1,7 @@
 // Caches the app shell so the app opens offline. Supabase API calls are never cached.
-const CACHE = 'soda-v1';
+const CACHE = 'soda-v2';
 const APP_FILES = [
-  './', './index.html', './styles.css', './app.js', './store.js', './remote.js', './streak.js', './config.js',
+  './', './index.html', './styles.css', './app.js', './store.js', './remote.js', './streak.js', './config.js', './cat.js', './messages.js', './achievements.js', './celebrate.js', './celebrate-ui.js',
   './vendor/supabase.js', './manifest.webmanifest', './icons/icon.svg', './icons/icon-192.png', './icons/icon-512.png',
 ];
 

@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   addDays, weekStart, limitFor, dayStatus, countsByDay, cheatInWeek, canApplyCheat,
-  computeStats, recentDays, weeklyTrend,
+  computeStats, recentDays, weeklyTrend, dailyRuns, badgeDates,
 } from '../streak.js';
 
 // 2026-10-12 is a Monday.
@@ -116,4 +116,16 @@ test('recentDays and weeklyTrend', () => {
   const r = recentDays({ today: MON, n: 3, counts, goals, cheats: new Set() });
   assert.deepEqual(r.map((x) => [x.day, x.count, x.status]), [[MON, 3, 'over'], [addDays(MON, -1), 0, 'ok'], [addDays(MON, -2), 0, 'ok']]);
   assert.deepEqual(weeklyTrend(MON, counts), { last7: 3, prev7: 5, change: -2 });
+});
+
+test('dailyRuns lists finished days with the running streak; badgeDates finds when thresholds were reached', () => {
+  const goals = [{ effective_from: addDays(MON, -8), daily_limit: 1 }];
+  const counts = mk({ [addDays(MON, -5)]: 3 });
+  const runs = dailyRuns({ today: MON, counts, goals, cheats: new Set() });
+  assert.equal(runs.length, 8); // -8..-1, today excluded
+  assert.deepEqual(runs.map((r) => r.run), [1, 2, 3, 0, 1, 2, 3, 4]);
+  const dates = badgeDates(runs, [3, 7]);
+  assert.equal(dates[3], addDays(MON, -6));
+  assert.equal(7 in dates, false);
+  assert.deepEqual(dailyRuns({ today: MON, counts, goals: [], cheats: new Set() }), []);
 });

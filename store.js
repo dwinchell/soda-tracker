@@ -10,7 +10,7 @@ export function createStore({ storage = globalThis.localStorage, remote = remote
   let state = fresh();
   try { state = { ...fresh(), ...JSON.parse(storage.getItem(KEY)) }; } catch { /* first run */ }
   const listeners = new Set();
-  let syncing = false, retryMs = 0, timer = null, online = true;
+  let syncing = false, retryMs = 0, timer = null, online = true, syncedOnce = false;
 
   const save = () => { try { storage.setItem(KEY, JSON.stringify(state)); } catch { /* storage full or blocked */ } };
   const emit = () => listeners.forEach((f) => f(state));
@@ -102,7 +102,7 @@ export function createStore({ storage = globalThis.localStorage, remote = remote
         if (r.error) { if (r.error.transient) { retryMs = Math.min(60000, retryMs ? retryMs * 2 : 2000); scheduleSync(retryMs); } return; }
         if (state.rev !== rev || state.outbox.length) { scheduleSync(300); return; }
         state.entries = r.data.entries; state.goals = r.data.goals; state.cheats = r.data.cheats;
-        state.synced = true; retryMs = 0;
+        state.synced = true; syncedOnce = true; retryMs = 0;
         save(); emit();
       } finally { syncing = false; emit(); }
     },
@@ -120,5 +120,7 @@ export function createStore({ storage = globalThis.localStorage, remote = remote
   }
   function scheduleSync(ms) { clearTimeout(timer); timer = setTimeout(() => api.sync(), ms); timer.unref?.(); }
   api.isSyncing = () => syncing;
+  /** True once a full download from the server has completed during this page load. */
+  api.hasSynced = () => syncedOnce;
   return api;
 }
