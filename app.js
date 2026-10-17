@@ -1,95 +1,194 @@
-import {createClient} from 'https://esm.sh/@supabase/supabase-js@2';
+import { createStore } from './store.js';
+import * as remote from './remote.js';
+import {
+  addDays, localYmd, parseYmd, countsByDay, computeStats, recentDays, weeklyTrend,
+  cheatInWeek, canApplyCheat,
+} from './streak.js';
 
-const SUPABASE_URL = 'https://vmqnbpqkficfxlyighzb.supabase.co';
-const SUPABASE_ANON_KEY = 'sb_publishable_7QhBJFfgAJFwe6Y2Gxdoxg_-8ZBEuWS';
+const store = createStore();
+const root = document.getElementById('app');
+let user = remote.storedUserId();   // known immediately from the saved session, even offline
+let loginError = '';
+let toast = '';
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const dayName = (day, today) => {
+  if (day === today) return 'Today';
+  if (day === addDays(today, -1)) return 'Yesterday';
+  return parseYmd(day).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' });
+};
+const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
 
-const emailInput = document.getElementById('email');
-const passwordInput = document.getElementById('password');
-const loginBtn = document.getElementById('login');
-const loginText = document.getElementById('login-text');
+function render() {
+  if (!user) return renderLogin();
+  const s = store.get();
+  if (!s.goals.length) return renderGoalSetup(s);
+  const today = store.today();
+  const cheats = new Set(s.cheats);
+  const counts = countsByDay(s.entries);
+  const st = computeStats({ today, counts, goals: s.goals, cheats });
+  const recent = recentDays({ today, n: 7, counts, goals: s.goals, cheats });
+  const trend = weeklyTrend(today, counts);
+  const weekCheat = cheatInWeek(today, cheats);
+  const over = st.todayStatus === 'over';
+  const maxScale = Math.max(st.todayLimit, ...recent.map((r) => Math.max(r.count, r.limit ?? 0)), 1);
 
-const authInfo = document.getElementById('auth-info');
-const todayOutput = document.getElementById('today-output');
+  const dots = Array.from({ length: Math.max(st.todayLimit, st.todayCount) }, (_, i) =>
+    `<span class="dot ${i < st.todayCount ? (i >= st.todayLimit ? 'extra' : 'on') : ''}"></span>`).join('');
 
-const add12Btn = document.getElementById('add-12');
+  let banner = '';
+  if (st.todayStatus === 'cheat') {
+    banner = `<div class="banner cheat"><b>Cheat day in use.</b> Your streak is safe today.
+      <button class="btn small" data-act="uncheat" data-day="${today}">Undo cheat day</button></div>`;
+  } else if (over && !weekCheat) {
+    banner = `<div class="banner over"><span><b>Over today's limit.</b> ${st.savedStreak > 0
+      ? `Use your cheat day to keep your ${plural(st.savedStreak, 'day')} streak.` : 'Tomorrow is a fresh start.'}</span>
+      <button class="btn primary" data-act="cheat" data-day="${today}">Use my cheat day</button></div>`;
+  } else if (over) {
+    banner = `<div class="banner over"><b>Over today's limit.</b> This week's cheat day is already used (${dayName(weekCheat, today)}). Tomorrow is a fresh start.</div>`;
+  }
 
-const loginScreen = document.getElementById('login-screen');
-const trackingScreen = document.getElementById('track-screen');
+  const cheatLine = weekCheat
+    ? `Cheat day this week: used on ${dayName(weekCheat, today)}.`
+    : `Cheat day this week: <b>available</b>. ${over || st.todayStatus === 'cheat' ? '' : `<button class="linkbtn" data-act="cheat" data-day="${today}">Plan it for today</button>`}`;
 
-loginBtn.addEventListener('click', async () => {
-    loginText.textContent = 'Signing in…';
-    todayOutput.textContent = 'Today total: —';
-
-    const email = emailInput.value;
-    const password = passwordInput.value;
-
-    const {data, error} = await supabase.auth.signInWithPassword({
-        email,
-        password
-    });
-
-    if (error) {
-        loginText.textContent = `Error:\n${error.message}`;
-        return;
+  const rows = recent.map((r) => {
+    const w = Math.min(100, (r.count / maxScale) * 100);
+    const lim = r.limit == null ? '' : `<span class="limit" style="left:calc(${(r.limit / maxScale) * 100}% - 1px)"></span>`;
+    const cls = r.status === 'over' ? 'over' : r.status === 'cheat' ? 'cheat' : '';
+    let tag = `<span class="tag" style="color:var(--ok)">${r.count} ✓</span>`;
+    if (r.status === 'nogoal') {
+      tag = `<span class="tag muted">${r.count || '—'}</span>`;
+    } else if (r.status === 'over') {
+      tag = canApplyCheat(r.day, today, cheats)
+        ? `<button class="btn small" data-act="cheat" data-day="${r.day}">${r.count} · cheat?</button>`
+        : `<span class="tag" style="color:var(--over)">${r.count} over</span>`;
+    } else if (r.status === 'cheat') {
+      tag = `<button class="btn small" data-act="uncheat" data-day="${r.day}" title="Remove cheat day">${r.count} · cheat ✕</button>`;
     }
+    return `<div class="row"><span class="when">${dayName(r.day, today)}</span>
+      <span class="track"><span class="fill ${cls}" style="width:${w}%"></span>${lim}</span>${tag}</div>`;
+  }).join('');
 
-    const user = data.user;
-    authInfo.textContent = `Signed in as ${user.id}`;
+  const diff = trend.change;
+  const trendText = trend.prev7 === 0 && trend.last7 === 0 ? 'No sodas in the last two weeks.'
+    : `Last 7 days: <b>${trend.last7}</b> vs <b>${trend.prev7}</b> the week before` +
+      (diff < 0 ? ` — down ${Math.abs(diff)} 🎉` : diff > 0 ? ` — up ${diff}` : ' — the same');
 
-    showTrackingScreen();
+  root.innerHTML = `
+    <div class="top"><h1>Soda Tracker</h1><span class="muted">${syncText(s)}</span></div>
 
-    await loadTodayTotal();
+    <section class="card streak" aria-label="Streak">
+      <div class="num">${st.current}</div>
+      <div class="label">day streak${st.current > 0 ? ' 🔥' : ''}</div>
+      <div class="best">Best: ${plural(st.best, 'day')}</div>
+    </section>
+
+    <section class="card today" aria-label="Today">
+      <div class="count ${over ? 'over' : ''}"><b>${st.todayCount}</b> of ${st.todayLimit} today</div>
+      <div class="dots" aria-hidden="true">${dots}</div>
+      <button id="soda" data-act="soda">🥤 I had a Coke</button>
+      <div><button class="linkbtn" data-act="undo" ${st.todayCount ? '' : 'disabled'}>Oops, undo last</button></div>
+    </section>
+
+    ${banner}
+    <div class="muted">${cheatLine}</div>
+
+    <section class="card" aria-label="Recent days">
+      <h2>Last 7 days <span style="text-transform:none;letter-spacing:0">(line = limit)</span></h2>
+      <div class="rows">${rows}</div>
+      <div class="trend">${trendText}</div>
+    </section>
+
+    <section class="card" aria-label="Goal">
+      <h2>Daily limit</h2>
+      <div class="goal">
+        <input id="goal" type="number" inputmode="numeric" min="0" max="50" value="${st.todayLimit}" aria-label="Sodas per day">
+        <span>sodas per day</span>
+        <button class="btn" data-act="goal">Save</button>
+      </div>
+      <p class="muted" style="margin:10px 0 0">Changes apply from today on. Earlier days keep the limit they had.</p>
+    </section>
+
+    ${s.error ? `<div class="banner over">${s.error} <button class="btn small" data-act="dismiss">OK</button></div>` : ''}
+    <footer><span>${toast}</span><button class="linkbtn" data-act="signout">Sign out</button></footer>`;
+}
+
+function syncText(s) {
+  if (!navigator.onLine) return s.outbox.length ? `Offline · ${s.outbox.length} waiting` : 'Offline';
+  if (s.outbox.length) return `${s.outbox.length} waiting to sync`;
+  return s.synced ? '✓ Synced' : 'Syncing…';
+}
+
+function renderGoalSetup(s) {
+  root.innerHTML = `
+    <div class="top"><h1>Soda Tracker</h1><span class="muted">${syncText(s)}</span></div>
+    <section class="card form">
+      <h2>Set your goal</h2>
+      <p style="margin:0">How many sodas a day is your limit? Stay at or under it each day to build a streak.</p>
+      <label>Sodas per day
+        <input id="goal" type="number" inputmode="numeric" min="0" max="50" value="3">
+      </label>
+      <button class="btn primary" data-act="goal">Start tracking</button>
+    </section>`;
+}
+
+function renderLogin() {
+  root.innerHTML = `
+    <div class="top"><h1>Soda Tracker</h1></div>
+    <form class="card form" id="login">
+      <label>Email <input name="email" type="email" autocomplete="email" required></label>
+      <label>Password <input name="password" type="password" autocomplete="current-password" required></label>
+      <div class="err" role="alert">${loginError}</div>
+      <button class="btn primary" type="submit">Sign in</button>
+    </form>`;
+}
+
+root.addEventListener('submit', async (ev) => {
+  if (ev.target.id !== 'login') return;
+  ev.preventDefault();
+  const f = new FormData(ev.target);
+  loginError = 'Signing in…'; render();
+  const err = await remote.signIn(f.get('email').trim(), f.get('password'));
+  loginError = err ? (navigator.onLine ? err : 'You need to be online to sign in the first time.') : '';
+  if (!err) { user = await remote.currentUserId(); store.sync(); }
+  render();
 });
 
-async function loadTodayTotal() {
-    // local midnight → now
-    const startOfToday = new Date();
-    startOfToday.setHours(0, 0, 0, 0);
+let toastTimer;
+const say = (msg) => { toast = msg; render(); clearTimeout(toastTimer); toastTimer = setTimeout(() => { toast = ''; render(); }, 2500); };
 
-    const {data, error} = await supabase
-        .from('soda_consumption')
-        .select('ounces')
-        .gte('created_at', startOfToday.toISOString());
-
-    if (error) {
-        todayOutput.textContent = `Today total error:\n${error.message}`;
-        return;
-    }
-
-    const total = data.reduce((sum, row) => sum + Number(row.ounces), 0);
-
-    todayOutput.textContent = `Today total: ${total} oz`;
-}
-
-function showTrackingScreen() {
-    loginScreen.hidden = true;
-    trackingScreen.hidden = false;
-    add12Btn.disabled = false;
-}
-
-add12Btn.addEventListener('click', async () => {
-    add12Btn.disabled = true;
-
-    const {error} = await supabase
-        .from('soda_consumption')
-        .insert({ounces: 12});
-
-    if (error) {
-        todayOutput.textContent = `Insert error:\n${error.message}`;
-        add12Btn.disabled = false;
-        return;
-    }
-
-    await loadTodayTotal();
-    add12Btn.disabled = false;
+root.addEventListener('click', async (ev) => {
+  const el = ev.target.closest('[data-act]');
+  if (!el) return;
+  const { act, day } = el.dataset;
+  if (act === 'soda') { store.addSoda(); navigator.vibrate?.(30); }
+  else if (act === 'undo') { if (store.undoLast()) say('Removed the last one'); }
+  else if (act === 'goal') {
+    const v = document.getElementById('goal').value;
+    if (v === '' || !Number.isFinite(Number(v))) return;
+    store.setGoal(v); say('Goal saved');
+  }
+  else if (act === 'cheat') { if (store.applyCheat(day)) say('Cheat day applied'); else say('One cheat day per week'); }
+  else if (act === 'uncheat') { store.removeCheat(day); say('Cheat day removed'); }
+  else if (act === 'dismiss') store.clearError();
+  else if (act === 'signout') {
+    if (store.hasUnsent() && !confirm('Some changes have not synced yet and would be lost. Sign out anyway?')) return;
+    await remote.signOut(); store.wipe(); user = null; render();
+  }
 });
 
-// Handle case where user is already signed in
-const { data } = await supabase.auth.getSession();
-if (data.session) {
-    authInfo.textContent = `Signed in as ${data.session.user.id}`;
-    showTrackingScreen();
-    await loadTodayTotal();
-}
+store.subscribe(() => { if (document.activeElement?.tagName === 'INPUT') return; render(); });
+addEventListener('online', () => { store.setOnline(true); render(); });
+addEventListener('offline', () => { store.setOnline(false); render(); });
+let lastSync = 0;
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'visible') return;
+  render(); // the day may have rolled over
+  if (Date.now() - lastSync > 30000) { lastSync = Date.now(); store.sync(); }
+});
+setInterval(() => { if (document.visibilityState === 'visible') render(); }, 60000);
+
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(() => {});
+
+render();
+remote.currentUserId().then((id) => { user = id; render(); if (id) store.sync(); });

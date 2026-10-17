@@ -1,38 +1,17 @@
 <!doctype html>
 <html lang="en">
 <head>
-    <meta charset="utf-8"/>
-    <title>Soda Tracker – Auth Test</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1"/>
-    <link rel="stylesheet" href="./styles.css"/>
+  <meta charset="utf-8">
+  <title>Soda Tracker</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#c8102e">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="icon" href="./icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="./icons/icon-192.png">
+  <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
-<h1>Soda Tracker</h1>
-
-<main id="login-screen">
-    <label>
-        Email
-        <input id="email" type="email" autocomplete="email"/>
-    </label>
-
-    <label>
-        Password
-        <input id="password" type="password" autocomplete="current-password"/>
-    </label>
-
-    <button id="login">Sign in</button>
-
-    <pre id="login-text">Please sign in</pre>
-</main>
-
-<main id="track-screen" hidden>
-    <pre id="auth-info"></pre>
-
-    <button id="add-12" disabled>+12 oz</button>
-
-    <pre id="today-output">Today total: —</pre>
-</main>
-
-<script type="module" src="./app.js"></script>
+  <main id="app" aria-live="polite"></main>
+  <script type="module" src="./app.js"></script>
 </body>
 </html>
