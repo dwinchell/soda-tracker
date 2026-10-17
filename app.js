@@ -124,7 +124,7 @@ function render() {
     <div class="muted">${cheatLine}</div>
 
     <section class="card" aria-label="Recent days">
-      <h2>Last 7 days <span style="text-transform:none;letter-spacing:0">(line = limit)</span></h2>
+      <h2>Last 7 days</h2>
       <div class="rows">${rows}</div>
       <div class="trend">${trendText}</div>
     </section>
