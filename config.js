@@ -3,3 +3,6 @@ export const SUPABASE_URL = 'https://vmqnbpqkficfxlyighzb.supabase.co';
 export const SUPABASE_KEY = 'sb_publishable_7QhBJFfgAJFwe6Y2Gxdoxg_-8ZBEuWS';
 // supabase-js 2.45.4, bundled into one ES module (see README: "Updating the vendored library").
 export const SUPABASE_JS = './vendor/supabase.js';
+
+// Shown in the footer so it is easy to tell which build a phone is running. Bump on each release.
+export const APP_VERSION = 'v2026.10.16-4';

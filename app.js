@@ -1,5 +1,6 @@
 import { createStore } from './store.js';
 import * as remote from './remote.js';
+import { APP_VERSION } from './config.js';
 import {
   addDays, localYmd, parseYmd, countsByDay, computeStats, recentDays, weeklyTrend,
   cheatInWeek, canApplyCheat, dailyRuns, badgeDates,
@@ -28,7 +29,7 @@ function render() {
   if (!user) return renderLogin();
   const s = store.get();
   // First sign-in on this device (any account, with or without data), or replayed from the footer.
-  if (showIntro || !introSeen()) return renderIntro(s, !showIntro);
+  if (showIntro || !introSeen()) return renderIntro(s, !introSeen());
   if (!s.goals.length) return renderGoalSetup(s);
   const today = store.today();
   const cheats = new Set(s.cheats);
@@ -142,7 +143,7 @@ function render() {
     </section>
 
     ${s.error ? `<div class="banner over">${s.error} <button class="btn small" data-act="dismiss">OK</button></div>` : ''}
-    <footer><span>${toast}</span><span><button class="linkbtn" data-act="meet">Meet ${CAT_NAME}</button><button class="linkbtn" data-act="signout">Sign out</button></span></footer>`;
+    <footer><span>${toast || `<span class="muted">${APP_VERSION}</span>`}</span><span><button class="linkbtn" data-act="meet">Meet ${CAT_NAME}</button><button class="linkbtn" data-act="signout">Sign out</button></span></footer>`;
 }
 
 function syncText(s) {
@@ -206,7 +207,7 @@ root.addEventListener('submit', async (ev) => {
   loginError = 'Signing in…'; render();
   const err = await remote.signIn(f.get('email').trim(), f.get('password'));
   loginError = err ? (navigator.onLine ? err : 'You need to be online to sign in the first time.') : '';
-  if (!err) { user = await remote.currentUserId(); store.sync(); }
+  if (!err) { user = await remote.currentUserId(); showIntro = true; store.sync(); } // Coca greets every sign-in
   render();
 });
 
@@ -231,7 +232,7 @@ root.addEventListener('click', async (ev) => {
   else if (act === 'meet') { showIntro = true; render(); window.scrollTo(0, 0); }
   else if (act === 'signout') {
     if (store.hasUnsent() && !confirm('Some changes have not synced yet and would be lost. Sign out anyway?')) return;
-    await remote.signOut(); store.wipe(); clearCelebrated(); user = null; render();
+    await remote.signOut(); store.wipe(); clearCelebrated(); user = null; showIntro = false; render();
   }
 });
 
