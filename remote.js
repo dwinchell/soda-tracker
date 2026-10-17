@@ -67,6 +67,8 @@ export const upsertGoal = (userId, g) =>
     { user_id: userId, effective_from: g.effective_from, daily_limit: g.daily_limit }, { onConflict: 'user_id,effective_from' }));
 export const addCheat = (userId, day) =>
   wrap((sb) => sb.from('cheat_days').upsert({ user_id: userId, day }, { onConflict: 'user_id,day', ignoreDuplicates: true }));
+export const markMet = (userId) =>
+  wrap((sb) => sb.from('coca_intro').upsert({ user_id: userId }, { onConflict: 'user_id', ignoreDuplicates: true }));
 export const removeCheat = (day) => wrap((sb) => sb.from('cheat_days').delete().eq('day', day));
 
 /** Downloads everything (keyset-paged: PostgREST returns at most 1000 rows per request). */
@@ -85,5 +87,7 @@ export async function fetchAll() {
   if (g.error) return g;
   const c = await wrap((sb) => sb.from('cheat_days').select('day'));
   if (c.error) return c;
-  return { error: null, data: { entries, goals: g.data, cheats: c.data.map((x) => x.day) } };
+  const m = await wrap((sb) => sb.from('coca_intro').select('user_id').limit(1));
+  if (m.error) return m;
+  return { error: null, data: { entries, goals: g.data, cheats: c.data.map((x) => x.day), met: m.data.length > 0 } };
 }

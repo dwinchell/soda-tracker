@@ -29,7 +29,9 @@ function render() {
   if (!user) return renderLogin();
   const s = store.get();
   // First sign-in on this device (any account, with or without data), or replayed from the footer.
-  if (showIntro || !introSeen()) return renderIntro(s, !introSeen());
+  // The intro shows once per user, ever: until the server says she has met Coca (table coca_intro), or on replay.
+  if (showIntro || s.met === false) return renderIntro(s, s.met === false);
+  if (s.met === null && !celebrateReady) return renderWaking(s); // first sync pending: do not guess
   if (!s.goals.length) return renderGoalSetup(s);
   const today = store.today();
   const cheats = new Set(s.cheats);
@@ -152,9 +154,12 @@ function syncText(s) {
   return s.synced ? '✓ Synced' : 'Syncing…';
 }
 
-const introKey = () => `soda.intro.${user}`;
-const introSeen = () => { try { return localStorage.getItem(introKey()) === '1'; } catch { return false; } };
-const markIntroSeen = () => { try { localStorage.setItem(introKey(), '1'); } catch { /* ignore */ } };
+function renderWaking(s) {
+  root.innerHTML = `
+    <div class="top"><h1>🐾 Soda Tracker</h1><span class="muted">${syncText(s)}</span></div>
+    <section class="card mascot">${catSvg({ size: 76, mood: 'smug', label: `${CAT_NAME}, asleep` })}
+      <p class="bubble">${CAT_NAME} is waking up…</p></section>`;
+}
 
 // First-login welcome (also reachable from the footer): warns, playfully, that she will be judged.
 function renderIntro(s, first) {
@@ -207,7 +212,7 @@ root.addEventListener('submit', async (ev) => {
   loginError = 'Signing in…'; render();
   const err = await remote.signIn(f.get('email').trim(), f.get('password'));
   loginError = err ? (navigator.onLine ? err : 'You need to be online to sign in the first time.') : '';
-  if (!err) { user = await remote.currentUserId(); showIntro = true; store.sync(); } // Coca greets every sign-in
+  if (!err) { user = await remote.currentUserId(); store.sync(); }
   render();
 });
 
@@ -228,7 +233,7 @@ root.addEventListener('click', async (ev) => {
   else if (act === 'cheat') { if (store.applyCheat(day)) say('Cheat day applied'); else say('One cheat day per week'); }
   else if (act === 'uncheat') { store.removeCheat(day); say('Cheat day removed'); }
   else if (act === 'dismiss') store.clearError();
-  else if (act === 'intro-ok') { markIntroSeen(); showIntro = false; render(); window.scrollTo(0, 0); maybeCelebrate(); }
+  else if (act === 'intro-ok') { store.meetCoca(); showIntro = false; render(); window.scrollTo(0, 0); maybeCelebrate(); }
   else if (act === 'meet') { showIntro = true; render(); window.scrollTo(0, 0); }
   else if (act === 'signout') {
     if (store.hasUnsent() && !confirm('Some changes have not synced yet and would be lost. Sign out anyway?')) return;
@@ -238,8 +243,8 @@ root.addEventListener('click', async (ev) => {
 
 let celebrateReady = false, celebrating = false;
 function maybeCelebrate() {
-  if (!user || celebrating || !celebrateReady || showIntro || !introSeen()) return;
   const s = store.get();
+  if (!user || celebrating || !celebrateReady || showIntro || s.met === false) return;
   if (!s.goals.length) return;
   const plan = planCelebration({
     today: store.today(), counts: countsByDay(s.entries), goals: s.goals, cheats: new Set(s.cheats),

@@ -4,7 +4,8 @@ import * as remoteReal from './remote.js';
 import { localYmd, canApplyCheat } from './streak.js';
 
 const KEY = 'soda.v1';
-const fresh = () => ({ entries: [], goals: [], cheats: [], outbox: [], rev: 0, synced: false, error: null });
+// met: has this user met Coca (accepted the intro)? null until the first sync says; the server table coca_intro is the truth.
+const fresh = () => ({ entries: [], goals: [], cheats: [], met: null, outbox: [], rev: 0, synced: false, error: null });
 
 export function createStore({ storage = globalThis.localStorage, remote = remoteReal, now = () => new Date() } = {}) {
   let state = fresh();
@@ -25,6 +26,8 @@ export function createStore({ storage = globalThis.localStorage, remote = remote
     } else if (op.k === 'uncheat') {
       const i = ob.findIndex((o) => o.k === 'cheat' && o.day === op.day);
       if (i >= 0) { ob.splice(i, 1); return; }
+    } else if (op.k === 'met') {
+      if (ob.some((o) => o.k === 'met')) return;
     } else if (op.k === 'goal') {
       const i = ob.findIndex((o) => o.k === 'goal' && o.effective_from === op.effective_from);
       if (i >= 0) ob.splice(i, 1);
@@ -67,6 +70,11 @@ export function createStore({ storage = globalThis.localStorage, remote = remote
       mutate(() => { state.cheats.push(day); queue({ k: 'cheat', day }); });
       return true;
     },
+    /** Records that she has met Coca, so the intro is never shown again on any device. */
+    meetCoca() {
+      if (state.met === true) return;
+      mutate(() => { state.met = true; queue({ k: 'met' }); });
+    },
     removeCheat(day) {
       if (!state.cheats.includes(day)) return false;
       mutate(() => { state.cheats = state.cheats.filter((d) => d !== day); queue({ k: 'uncheat', day }); });
@@ -101,7 +109,7 @@ export function createStore({ storage = globalThis.localStorage, remote = remote
         const r = await remote.fetchAll();
         if (r.error) { if (r.error.transient) { retryMs = Math.min(60000, retryMs ? retryMs * 2 : 2000); scheduleSync(retryMs); } return; }
         if (state.rev !== rev || state.outbox.length) { scheduleSync(300); return; }
-        state.entries = r.data.entries; state.goals = r.data.goals; state.cheats = r.data.cheats;
+        state.entries = r.data.entries; state.goals = r.data.goals; state.cheats = r.data.cheats; state.met = r.data.met;
         state.synced = true; syncedOnce = true; retryMs = 0;
         save(); emit();
       } finally { syncing = false; emit(); }
@@ -115,6 +123,7 @@ export function createStore({ storage = globalThis.localStorage, remote = remote
       case 'goal': return remote.upsertGoal(uid, op);
       case 'cheat': return remote.addCheat(uid, op.day);
       case 'uncheat': return remote.removeCheat(op.day);
+      case 'met': return remote.markMet(uid);
       default: return Promise.resolve({ error: null });
     }
   }

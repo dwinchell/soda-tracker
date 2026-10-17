@@ -8,7 +8,7 @@ A tiny installable web app (PWA) for cutting down on soda: one big button to log
 - **Streak**: each finished day at or under the limit adds 1; a finished day over the limit resets it to 0. Today is added once the day ends (at midnight). Days before the first goal was set are ignored, and days with no taps count as 0 sodas.
 - **Cheat day**: once per week (Monday to Sunday) you can cover a day over the limit. A cheat day counts as a day in the streak instead of resetting it. Can be applied to today or any of the last 6 days, and removed again. The database enforces one per week.
 - **Coca the cat**: a judgmental Havana Brown (cola-colored fur, green eyes, on a cream backdrop so she stands out in light and dark mode) reacts on the main screen (side-eye at the limit, glare when over, grudging approval otherwise) and throws the celebrations.
-- **Introducing Coca**: after every sign-in (and on first launch on a device) a full-screen intro playfully warns that Coca will judge her for going over the limit. "Meet Coca" in the footer replays it any time. Celebrations wait until it has been accepted. The footer shows the build version.
+- **Introducing Coca**: the first time a user signs in, a full-screen intro playfully warns that Coca will judge her for going over the limit. Whether she has met Coca is stored in the `coca_intro` table (one row per user), so it shows once per user, on any device, never again. "Meet Coca" in the footer replays it. Celebrations wait until it has been accepted. The footer shows the build version.
 - **Celebrations**: the first time she opens the app on a new day after a day under the limit, a pop-up with a random cat message appears (never the same one twice in a row). A cheat-day yesterday gets a suspicious message instead. Every 7th day of the streak is a bigger "Week N" party (party hat, more confetti, golden glow, growing with each week up to week 5). Shown once per device per day; skipped if yesterday was over the limit.
 - **Badges** at 3, 7, 14, 30, 100 and 365 days of streak (Kitten Steps, Whisker Week, Catnap Champ, Purr-fect Month, Cool Cat, Nine Lives Legend), shown on a shelf with the date earned and celebrated when unlocked. Earned from her best streak, so they are never lost.
 - **Progress**: last 7 days against the limit line, and last 7 days vs the 7 before.
@@ -28,7 +28,7 @@ Same shape as the Personal Tracker app: local-first state in `localStorage` plus
 | `app.js`, `index.html`, `styles.css` | UI |
 | `sw.js`, `manifest.webmanifest`, `icons/` | Offline and install support |
 | `vendor/supabase.js` | supabase-js 2.45.4 bundled (so the app opens offline) |
-| `sql/001_schema.sql` | Database schema (already applied) |
+| `sql/001_schema.sql`, `sql/002_coca_intro.sql` | Database schema (already applied) |
 
 ## Security
 Row Level Security is on for all three tables; rows are visible only to their owner and `anon` has no access. The key in `config.js` is the public key and is safe to ship. Never commit the service-role key or database password. Turn off public signups in Supabase (Authentication, Sign In / Providers) and create the account by hand.

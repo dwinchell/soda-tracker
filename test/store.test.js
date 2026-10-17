@@ -6,7 +6,7 @@ const memStorage = () => { const m = new Map(); return { getItem: (k) => m.get(k
 const NOW = new Date(2026, 9, 14, 15, 0, 0); // Wed 2026-10-14 local
 
 function fakeRemote({ failWith } = {}) {
-  const db = { entries: [], goals: [], cheats: [] };
+  const db = { entries: [], goals: [], cheats: [], met: false };
   const calls = [];
   const ok = { error: null };
   return {
@@ -21,7 +21,8 @@ function fakeRemote({ failWith } = {}) {
       db.cheats.push(d); return ok;
     },
     removeCheat: async (d) => { calls.push(['uncheat', d]); db.cheats = db.cheats.filter((x) => x !== d); return ok; },
-    fetchAll: async () => ({ error: null, data: { entries: [...db.entries], goals: [...db.goals], cheats: [...db.cheats] } }),
+    markMet: async () => { calls.push(['met']); db.met = true; return ok; },
+    fetchAll: async () => ({ error: null, data: { entries: [...db.entries], goals: [...db.goals], cheats: [...db.cheats], met: db.met } }),
   };
 }
 const make = (remote = fakeRemote()) => ({ remote, store: createStore({ storage: memStorage(), remote, now: () => NOW }) });
@@ -98,4 +99,38 @@ test('state survives a reload', () => {
   const b = createStore({ storage, remote: fakeRemote(), now: () => NOW });
   assert.equal(b.get().entries.length, 1);
   assert.equal(b.get().outbox.length, 1);
+});
+
+test('whether she has met Coca comes from the server, and is unknown until the first sync', async () => {
+  const { store, remote } = make();
+  assert.equal(store.get().met, null);
+  await store.sync();
+  assert.equal(store.get().met, false); // new user: show the intro
+  remote.db.met = true;                 // met on another device
+  await store.sync();
+  assert.equal(store.get().met, true);
+});
+
+test('meeting Coca is recorded once, locally at once and on the server on sync', async () => {
+  const { store, remote } = make();
+  await store.sync();
+  store.meetCoca(); store.meetCoca();
+  assert.equal(store.get().met, true);
+  assert.equal(store.get().outbox.length, 1);
+  await store.sync();
+  assert.equal(remote.db.met, true);
+  assert.equal(remote.calls.filter((c) => c[0] === 'met').length, 1);
+  store.meetCoca(); // already met: nothing queued
+  assert.equal(store.get().outbox.length, 0);
+});
+
+test('a failed send keeps the met flag queued; wiping on sign-out forgets it locally only', async () => {
+  const { store, remote } = make();
+  await store.sync();
+  remote.markMet = async () => ({ error: { message: 'offline', transient: true } });
+  store.meetCoca(); await store.sync();
+  assert.equal(store.get().met, true);
+  assert.equal(store.get().outbox.length, 1);
+  store.wipe();
+  assert.equal(store.get().met, null);
 });
