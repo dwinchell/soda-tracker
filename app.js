@@ -27,11 +27,9 @@ const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
 function render() {
   if (!user) return renderLogin();
   const s = store.get();
-  if (showIntro) return renderIntro(s, false);
-  if (!s.goals.length) {
-    if (!celebrateReady) return renderWaking(s); // wait for the first sync so a returning user is not treated as new
-    return introSeen() ? renderGoalSetup(s) : renderIntro(s, true);
-  }
+  // First sign-in on this device (any account, with or without data), or replayed from the footer.
+  if (showIntro || !introSeen()) return renderIntro(s, !showIntro);
+  if (!s.goals.length) return renderGoalSetup(s);
   const today = store.today();
   const cheats = new Set(s.cheats);
   const counts = countsByDay(s.entries);
@@ -157,13 +155,6 @@ const introKey = () => `soda.intro.${user}`;
 const introSeen = () => { try { return localStorage.getItem(introKey()) === '1'; } catch { return false; } };
 const markIntroSeen = () => { try { localStorage.setItem(introKey(), '1'); } catch { /* ignore */ } };
 
-function renderWaking(s) {
-  root.innerHTML = `
-    <div class="top"><h1>🐾 Soda Tracker</h1><span class="muted">${syncText(s)}</span></div>
-    <section class="card mascot">${catSvg({ size: 76, mood: 'smug', label: `${CAT_NAME}, asleep` })}
-      <p class="bubble">${CAT_NAME} is waking up…</p></section>`;
-}
-
 // First-login welcome (also reachable from the footer): warns, playfully, that she will be judged.
 function renderIntro(s, first) {
   root.innerHTML = `
@@ -236,7 +227,7 @@ root.addEventListener('click', async (ev) => {
   else if (act === 'cheat') { if (store.applyCheat(day)) say('Cheat day applied'); else say('One cheat day per week'); }
   else if (act === 'uncheat') { store.removeCheat(day); say('Cheat day removed'); }
   else if (act === 'dismiss') store.clearError();
-  else if (act === 'intro-ok') { markIntroSeen(); showIntro = false; render(); }
+  else if (act === 'intro-ok') { markIntroSeen(); showIntro = false; render(); window.scrollTo(0, 0); maybeCelebrate(); }
   else if (act === 'meet') { showIntro = true; render(); window.scrollTo(0, 0); }
   else if (act === 'signout') {
     if (store.hasUnsent() && !confirm('Some changes have not synced yet and would be lost. Sign out anyway?')) return;
@@ -246,7 +237,7 @@ root.addEventListener('click', async (ev) => {
 
 let celebrateReady = false, celebrating = false;
 function maybeCelebrate() {
-  if (!user || celebrating || !celebrateReady || showIntro) return;
+  if (!user || celebrating || !celebrateReady || showIntro || !introSeen()) return;
   const s = store.get();
   if (!s.goals.length) return;
   const plan = planCelebration({
