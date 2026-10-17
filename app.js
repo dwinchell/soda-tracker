@@ -37,14 +37,14 @@ function render() {
 
   let banner = '';
   if (st.todayStatus === 'cheat') {
-    banner = `<div class="banner cheat"><b>Cheat day in use.</b> Your streak is safe today.
+    banner = `<div class="banner cheat"><b>Cheat day in use.</b> Today still counts toward your streak.
       <button class="btn small" data-act="uncheat" data-day="${today}">Undo cheat day</button></div>`;
   } else if (over && !weekCheat) {
-    banner = `<div class="banner over"><span><b>Over today's limit.</b> ${st.savedStreak > 0
-      ? `Use your cheat day to keep your ${plural(st.savedStreak, 'day')} streak.` : 'Tomorrow is a fresh start.'}</span>
+    banner = `<div class="banner over"><span><b>Over today's limit.</b> ${st.atRisk
+      ? `Use your cheat day to keep your ${plural(st.current, 'day')} streak.` : 'Tomorrow is a fresh start.'}</span>
       <button class="btn primary" data-act="cheat" data-day="${today}">Use my cheat day</button></div>`;
   } else if (over) {
-    banner = `<div class="banner over"><b>Over today's limit.</b> This week's cheat day is already used (${dayName(weekCheat, today)}). Tomorrow is a fresh start.</div>`;
+    banner = `<div class="banner over"><b>Over today's limit.</b> This week's cheat day is already used (${dayName(weekCheat, today)}).${st.atRisk ? ' Your streak resets at midnight.' : ' Tomorrow is a fresh start.'}</div>`;
   }
 
   const cheatLine = weekCheat
@@ -80,7 +80,7 @@ function render() {
     <section class="card streak" aria-label="Streak">
       <div class="num">${st.current}</div>
       <div class="label">day streak${st.current > 0 ? ' 🔥' : ''}</div>
-      <div class="best">Best: ${plural(st.best, 'day')}</div>
+      <div class="best">Best: ${plural(st.best, 'day')} · today counts when it ends</div>
     </section>
 
     <section class="card today" aria-label="Today">

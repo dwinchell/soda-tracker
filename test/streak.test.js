@@ -34,53 +34,59 @@ test('dayStatus', () => {
 
 test('no goal -> no streak', () => assert.equal(stats({ today: MON, goals: [] }).hasGoal, false));
 
-test('empty days count as compliant; today counts live', () => {
+test('empty finished days count as compliant; today is not counted yet', () => {
   const s = stats({ today: MON, goals: [{ effective_from: addDays(MON, -3), daily_limit: 2 }] });
-  assert.equal(s.current, 4); // 3 prior days + today
-  assert.equal(s.best, 4);
+  assert.equal(s.current, 3); // the 3 finished days
+  assert.equal(s.best, 3);
 });
 
-test('going over today drops the streak to 0 but remembers what was saved', () => {
+test('goal set today: streak is 0 until the day ends', () => {
+  assert.equal(stats({ today: MON, goals: [{ effective_from: MON, daily_limit: 2 }] }).current, 0);
+});
+
+test('going over today does not change the streak yet but flags it at risk', () => {
   const goals = [{ effective_from: addDays(MON, -5), daily_limit: 2 }];
   const s = stats({ today: MON, goals, counts: mk({ [MON]: 3 }) });
-  assert.equal(s.current, 0);
-  assert.equal(s.savedStreak, 5);
+  assert.equal(s.current, 5);
   assert.equal(s.todayStatus, 'over');
-  assert.equal(s.best, 5);
+  assert.equal(s.atRisk, true);
+  const c = stats({ today: MON, goals, counts: mk({ [MON]: 3 }), cheats: new Set([MON]) });
+  assert.equal(c.todayStatus, 'cheat');
+  assert.equal(c.atRisk, false);
+  assert.equal(c.current, 5);
 });
 
-test('a cheat day over the limit keeps the streak but does not add to it', () => {
+test('a finished day over the limit resets the streak', () => {
   const goals = [{ effective_from: addDays(MON, -5), daily_limit: 2 }];
   const counts = mk({ [addDays(MON, -2)]: 5 });
-  assert.equal(stats({ today: MON, goals, counts }).current, 2); // reset on -2, then -1 and today
-  const s = stats({ today: MON, goals, counts, cheats: new Set([addDays(MON, -2)]) });
-  assert.equal(s.current, 5); // -5,-4,-3 (3) + (-2 neutral) + -1 + today = 5
+  assert.equal(stats({ today: MON, goals, counts }).current, 1); // only yesterday
 });
 
-test('cheat covers today', () => {
-  const goals = [{ effective_from: addDays(MON, -2), daily_limit: 1 }];
-  const s = stats({ today: MON, goals, counts: mk({ [MON]: 4 }), cheats: new Set([MON]) });
-  assert.equal(s.todayStatus, 'cheat');
-  assert.equal(s.current, 2);
+test('a cheat day over the limit counts as a day and keeps the streak', () => {
+  const goals = [{ effective_from: addDays(MON, -5), daily_limit: 2 }];
+  const counts = mk({ [addDays(MON, -2)]: 5 });
+  const s = stats({ today: MON, goals, counts, cheats: new Set([addDays(MON, -2)]) });
+  assert.equal(s.current, 5); // -5..-1, cheat day included
+  assert.equal(s.best, 5);
 });
 
 test('raising a limit later does not rewrite past days', () => {
   const goals = [{ effective_from: addDays(MON, -4), daily_limit: 1 }, { effective_from: MON, daily_limit: 5 }];
   const counts = mk({ [addDays(MON, -2)]: 3 }); // over under the old limit of 1
-  assert.equal(stats({ today: MON, goals, counts }).current, 2); // -1 and today
+  assert.equal(stats({ today: MON, goals, counts }).current, 1); // only yesterday
 });
 
 test('limit of zero', () => {
-  const goals = [{ effective_from: addDays(MON, -1), daily_limit: 0 }];
+  const goals = [{ effective_from: addDays(MON, -2), daily_limit: 0 }];
   assert.equal(stats({ today: MON, goals }).current, 2);
-  assert.equal(stats({ today: MON, goals, counts: mk({ [MON]: 1 }) }).current, 0);
+  assert.equal(stats({ today: MON, goals, counts: mk({ [addDays(MON, -1)]: 1 }) }).current, 0);
 });
 
 test('best streak survives a later reset', () => {
   const goals = [{ effective_from: addDays(MON, -9), daily_limit: 1 }];
   const s = stats({ today: MON, goals, counts: mk({ [addDays(MON, -3)]: 2 }) });
   assert.equal(s.best, 6); // days -9..-4
-  assert.equal(s.current, 3); // -2, -1, today
+  assert.equal(s.current, 2); // -2, -1
 });
 
 test('one cheat day per Mon-Sun week', () => {

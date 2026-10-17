@@ -5,8 +5,8 @@ A tiny installable web app (PWA) for cutting down on soda: one big button to log
 ## How it works
 - **Tap "I had a Coke"** to log one soda. It counts instantly (works offline) and syncs in the background. "Oops, undo last" removes the latest one from today.
 - **Daily limit**: set how many sodas a day. Changing it applies from today on; earlier days keep the limit they had.
-- **Streak**: each day at or under the limit adds 1. A day over the limit resets it to 0. Days before the first goal was set are ignored, and days with no taps count as 0 sodas. Today counts live: it adds 1 while you are at or under the limit, and drops to 0 the moment you go over.
-- **Cheat day**: once per week (Monday to Sunday) you can cover a day over the limit. It keeps the streak alive without adding to it. Can be applied to today or any of the last 6 days, and removed again. The database enforces one per week.
+- **Streak**: each finished day at or under the limit adds 1; a finished day over the limit resets it to 0. Today is added once the day ends (at midnight). Days before the first goal was set are ignored, and days with no taps count as 0 sodas.
+- **Cheat day**: once per week (Monday to Sunday) you can cover a day over the limit. A cheat day counts as a day in the streak instead of resetting it. Can be applied to today or any of the last 6 days, and removed again. The database enforces one per week.
 - **Progress**: last 7 days against the limit line, and last 7 days vs the 7 before.
 - Days are the phone's local calendar days (midnight to midnight).
 

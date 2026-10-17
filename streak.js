@@ -55,35 +55,27 @@ export function canApplyCheat(day, today, cheats) {
 /**
  * Streak rules:
  *  - Days before the first goal was set are ignored.
- *  - Each day at or under the limit adds 1. Days with no taps count as 0 sodas.
- *  - A day over the limit resets the streak to 0, unless a cheat day covers it:
- *    then the streak neither grows nor resets.
- *  - Today counts live: it adds 1 while she is at or under the limit, and the
- *    streak drops to 0 the moment she goes over (unless today is a cheat day).
- * Returns { hasGoal, current, best, savedStreak, todayStatus, todayCount, todayLimit }.
- * `savedStreak` is the streak as of yesterday, i.e. what a cheat day would protect.
+ *  - Only finished days count; today is added once it ends.
+ *  - A finished day at or under the limit adds 1. Days with no taps count as 0 sodas.
+ *  - A finished day over the limit resets the streak to 0, unless a cheat day covers it:
+ *    then it counts as a day like any other (+1).
+ * Returns { hasGoal, current, best, todayStatus, todayCount, todayLimit, atRisk }.
+ * `atRisk` is true when today is over the limit with no cheat day, so a streak would reset tonight.
  */
 export function computeStats({ today, counts, goals, cheats }) {
   if (!goals.length) return { hasGoal: false };
   const first = goals.reduce((a, g) => (g.effective_from < a ? g.effective_from : a), goals[0].effective_from);
-  let run = 0, best = 0, saved = 0;
-  for (let d = first; d <= today; d = addDays(d, 1)) {
-    if (d === today) saved = run;
+  let run = 0, best = 0;
+  for (let d = first; d < today; d = addDays(d, 1)) {
     const st = dayStatus(d, counts.get(d) || 0, limitFor(goals, d), cheats);
-    if (st === 'ok') run++;
+    if (st === 'ok' || st === 'cheat') run++;
     else if (st === 'over') run = 0;
     best = Math.max(best, run);
   }
   const todayLimit = limitFor(goals, today);
-  return {
-    hasGoal: true,
-    current: run,
-    best,
-    savedStreak: saved,
-    todayCount: counts.get(today) || 0,
-    todayLimit,
-    todayStatus: dayStatus(today, counts.get(today) || 0, todayLimit, cheats),
-  };
+  const todayCount = counts.get(today) || 0;
+  const todayStatus = dayStatus(today, todayCount, todayLimit, cheats);
+  return { hasGoal: true, current: run, best, todayCount, todayLimit, todayStatus, atRisk: todayStatus === 'over' && run > 0 };
 }
 
 /** The last `n` days ending today, newest first, with counts and status. */
