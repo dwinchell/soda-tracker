@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { addDays } from '../streak.js';
 import { BADGES, badgeSvg } from '../achievements.js';
 import { catSvg, MOODS } from '../cat.js';
-import { POOLS, QUIPS } from '../messages.js';
+import { POOLS, QUIPS, CAT_NAME } from '../messages.js';
 import { planCelebration, pickMessage, fill, pickStable, loadCelebrated, saveCelebrated } from '../celebrate.js';
 
 const TODAY = '2026-10-20';
@@ -128,4 +128,11 @@ test('art builders produce SVG for every mood and badge', () => {
     assert.match(badgeSvg(b), /<svg/);
     assert.match(badgeSvg(b, { earned: false }), /locked/);
   }
+});
+
+test('the cat is named Coca and each svg gets its own clip id', () => {
+  assert.equal(CAT_NAME, 'Coca');
+  const ids = [...(catSvg() + catSvg()).matchAll(/id="(cat-stage-\d+)"/g)].map((m) => m[1]);
+  assert.equal(new Set(ids).size, 2);
+  assert.ok(!/clip-path/.test(catSvg({ stage: false })));
 });

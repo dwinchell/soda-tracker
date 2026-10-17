@@ -106,3 +106,16 @@ footer { display: flex; justify-content: space-between; align-items: center; fon
 @media (prefers-reduced-motion: reduce) {
   .celebrate, .cel-card, .cel-cat, .cel-badge { animation: none; }
 }
+
+/* Introducing Coca */
+.intro { text-align: center; display: grid; gap: 12px; justify-items: center; }
+.intro p { margin: 0; }
+.intro .intro-title { font-size: 1.7rem; margin: 0; color: var(--ink); text-transform: none; letter-spacing: 0; }
+.intro-cat { margin-top: 4px; animation: bob 2.4s ease-in-out infinite; }
+.intro-quote { font-size: 1.05rem; }
+.intro-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; text-align: left; width: 100%; }
+.intro-list li { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; background: var(--bg); border-radius: 12px; }
+.intro-list li span:first-child { font-size: 1.3rem; line-height: 1.2; }
+.intro .btn { width: 100%; padding: 14px; font-size: 1.05rem; }
+footer .linkbtn { margin-left: 4px; }
+@media (prefers-reduced-motion: reduce) { .intro-cat { animation: none; } }

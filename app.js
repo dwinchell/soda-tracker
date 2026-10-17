@@ -6,12 +6,13 @@ import {
 } from './streak.js';
 import { catSvg } from './cat.js';
 import { BADGES, badgeSvg } from './achievements.js';
-import { QUIPS } from './messages.js';
+import { QUIPS, CAT_NAME } from './messages.js';
 import { planCelebration, loadCelebrated, saveCelebrated, clearCelebrated, pickStable } from './celebrate.js';
 import { showCelebration } from './celebrate-ui.js';
 
 const store = createStore();
 const root = document.getElementById('app');
+let showIntro = false;
 let user = remote.storedUserId();   // known immediately from the saved session, even offline
 let loginError = '';
 let toast = '';
@@ -26,7 +27,11 @@ const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
 function render() {
   if (!user) return renderLogin();
   const s = store.get();
-  if (!s.goals.length) return renderGoalSetup(s);
+  if (showIntro) return renderIntro(s, false);
+  if (!s.goals.length) {
+    if (!celebrateReady) return renderWaking(s); // wait for the first sync so a returning user is not treated as new
+    return introSeen() ? renderGoalSetup(s) : renderIntro(s, true);
+  }
   const today = store.today();
   const cheats = new Set(s.cheats);
   const counts = countsByDay(s.entries);
@@ -102,8 +107,8 @@ function render() {
       <div class="best">Best: ${plural(st.best, 'day')} · today counts when it ends</div>
     </section>
 
-    <section class="card mascot" aria-label="Biscuit the cat">
-      ${catSvg({ size: 72, mood, label: 'Biscuit, the judgmental cat' })}
+    <section class="card mascot" aria-label="${CAT_NAME} the cat">
+      ${catSvg({ size: 76, mood, label: `${CAT_NAME}, the judgmental cat` })}
       <p class="bubble">${quip}</p>
     </section>
 
@@ -139,13 +144,44 @@ function render() {
     </section>
 
     ${s.error ? `<div class="banner over">${s.error} <button class="btn small" data-act="dismiss">OK</button></div>` : ''}
-    <footer><span>${toast}</span><button class="linkbtn" data-act="signout">Sign out</button></footer>`;
+    <footer><span>${toast}</span><span><button class="linkbtn" data-act="meet">Meet ${CAT_NAME}</button><button class="linkbtn" data-act="signout">Sign out</button></span></footer>`;
 }
 
 function syncText(s) {
   if (!navigator.onLine) return s.outbox.length ? `Offline · ${s.outbox.length} waiting` : 'Offline';
   if (s.outbox.length) return `${s.outbox.length} waiting to sync`;
   return s.synced ? '✓ Synced' : 'Syncing…';
+}
+
+const introKey = () => `soda.intro.${user}`;
+const introSeen = () => { try { return localStorage.getItem(introKey()) === '1'; } catch { return false; } };
+const markIntroSeen = () => { try { localStorage.setItem(introKey(), '1'); } catch { /* ignore */ } };
+
+function renderWaking(s) {
+  root.innerHTML = `
+    <div class="top"><h1>🐾 Soda Tracker</h1><span class="muted">${syncText(s)}</span></div>
+    <section class="card mascot">${catSvg({ size: 76, mood: 'smug', label: `${CAT_NAME}, asleep` })}
+      <p class="bubble">${CAT_NAME} is waking up…</p></section>`;
+}
+
+// First-login welcome (also reachable from the footer): warns, playfully, that she will be judged.
+function renderIntro(s, first) {
+  root.innerHTML = `
+    <div class="top"><h1>🐾 Soda Tracker</h1></div>
+    <section class="card intro">
+      <div class="intro-cat">${catSvg({ size: 168, mood: 'judge', label: `${CAT_NAME}, a Havana Brown cat, judging you` })}</div>
+      <h2 class="intro-title">Introducing ${CAT_NAME}</h2>
+      <p class="bubble intro-quote">“I will be watching.”</p>
+      <p>${CAT_NAME} is a Havana Brown, the exact color of a cold Coke, with strong opinions about yours.
+        She counts every one. She forgets nothing.</p>
+      <ul class="intro-list">
+        <li><span>🥤</span><span>Tap the big button every time you have a Coke. She'll know if you don't.</span></li>
+        <li><span>🔥</span><span>Stay at or under your daily limit to build a streak. She will pretend not to care.</span></li>
+        <li><span>😾</span><span>Go over, and she will notice. She won't say a word. She will just <i>look at you</i>.</span></li>
+        <li><span>🐟</span><span>One cheat day a week. She'll allow it. Silently. Judging.</span></li>
+      </ul>
+      <button class="btn primary" data-act="intro-ok">${first ? 'I accept being judged' : 'Back to her watchful gaze'}</button>
+    </section>`;
 }
 
 function renderGoalSetup(s) {
@@ -200,6 +236,8 @@ root.addEventListener('click', async (ev) => {
   else if (act === 'cheat') { if (store.applyCheat(day)) say('Cheat day applied'); else say('One cheat day per week'); }
   else if (act === 'uncheat') { store.removeCheat(day); say('Cheat day removed'); }
   else if (act === 'dismiss') store.clearError();
+  else if (act === 'intro-ok') { markIntroSeen(); showIntro = false; render(); }
+  else if (act === 'meet') { showIntro = true; render(); window.scrollTo(0, 0); }
   else if (act === 'signout') {
     if (store.hasUnsent() && !confirm('Some changes have not synced yet and would be lost. Sign out anyway?')) return;
     await remote.signOut(); store.wipe(); clearCelebrated(); user = null; render();
@@ -208,7 +246,7 @@ root.addEventListener('click', async (ev) => {
 
 let celebrateReady = false, celebrating = false;
 function maybeCelebrate() {
-  if (!user || celebrating || !celebrateReady) return;
+  if (!user || celebrating || !celebrateReady || showIntro) return;
   const s = store.get();
   if (!s.goals.length) return;
   const plan = planCelebration({
@@ -221,7 +259,11 @@ function maybeCelebrate() {
   showCelebration(plan, { onClose: () => { celebrating = false; } });
 }
 // Wait for this session's sync so yesterday's sodas from other devices are counted; do not wait forever.
-const readyNow = () => { celebrateReady = true; maybeCelebrate(); };
+const readyNow = () => {
+  celebrateReady = true;
+  if (document.activeElement?.tagName !== 'INPUT') render(); // no-goal screens waited for this
+  maybeCelebrate();
+};
 if (!navigator.onLine) readyNow(); else setTimeout(readyNow, 5000);
 
 store.subscribe(() => {

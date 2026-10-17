@@ -1,3 +1,5 @@
+export const CAT_NAME = 'Coca';
+
 // Message pools. {n} = streak days, {weeks} = completed weeks, {weeksText} = "1 week" / "2 weeks".
 export const POOLS = {
   daily: [
